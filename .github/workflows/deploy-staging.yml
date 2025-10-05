@@ -2,12 +2,13 @@ name: Deploy to AKS Staging
 
 on:
     workflow_run:
-        workflows: ['Build and Push to ACR']
+        workflows: ['CI - Test, Build & Push (testing branch)']
         types:
             - completed
 
 jobs:
     deploy-staging:
+        # only run if previous CI succeeded
         if: ${{ github.event.workflow_run.conclusion == 'success' }}
         runs-on: ubuntu-latest
 
@@ -29,6 +30,7 @@ jobs:
             - name: Create staging namespace
               run: |
                   kubectl create namespace staging --dry-run=client -o yaml | kubectl apply -f -
+                  echo "✅ Namespace 'staging' ready."
 
             - name: Deploy backend services
               run: |
@@ -42,15 +44,17 @@ jobs:
                   kubectl apply -f k8s/service-frontend.yaml -n staging
 
             - name: Wait for pods to be ready
-              run: kubectl wait --for=condition=ready pod -l app=frontend -n staging --timeout=300s
+              run: |
+                  kubectl wait --for=condition=ready pods --all -n staging --timeout=300s
+                  echo "✅ All pods are ready in 'staging' namespace."
 
-            - name: Run simple acceptance test
+            - name: Acceptance test (check services)
               run: |
                   kubectl get svc -n staging
-                  echo "Staging deployment verified successfully!"
+                  echo "✅ Staging deployment verified successfully!"
 
-            - name: Destroy staging environment
+            - name: Cleanup staging environment
               if: always()
               run: |
                   kubectl delete namespace staging --ignore-not-found
-                  echo "Clean up staging environment."
+                  echo "🧹 Cleaned up temporary staging environment."
