@@ -45,7 +45,9 @@ jobs:
 
             - name: Wait for all pods to be ready
               run: |
-                  kubectl wait --for=condition=ready pod -l app=frontend -n production --timeout=300s
+                echo "Waiting for all pods in production namespace to be ready..."
+                kubectl wait --for=condition=available deployment --all -n production --timeout=300s
+                kubectl get pods -n production
 
             - name: Verify deployment
               run: |
