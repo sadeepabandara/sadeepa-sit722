@@ -1,0 +1,53 @@
+name: Deploy to AKS Production
+
+on:
+    push:
+        branches:
+            - main
+
+env:
+    ACR_NAME: ${{ secrets.ACR_NAME }}
+    ACR_LOGIN_SERVER: ${{ secrets.ACR_LOGIN_SERVER }}
+
+jobs:
+    deploy-production:
+        runs-on: ubuntu-latest
+
+        steps:
+            - name: Checkout code
+              uses: actions/checkout@v4
+
+            - name: Azure Login
+              uses: azure/login@v2
+              with:
+                  creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+            - name: Set AKS context
+              uses: azure/aks-set-context@v4
+              with:
+                  resource-group: ${{ secrets.RESOURCE_GROUP }}
+                  cluster-name: ${{ secrets.AKS_CLUSTER_NAME }}
+
+            - name: Create production namespace (if not exists)
+              run: |
+                  kubectl create namespace production --dry-run=client -o yaml | kubectl apply -f -
+
+            - name: Deploy backend & frontend services to production
+              run: |
+                  kubectl apply -f k8s/deployment-customer.yaml -n production
+                  kubectl apply -f k8s/deployment-product.yaml -n production
+                  kubectl apply -f k8s/deployment-order.yaml -n production
+                  kubectl apply -f k8s/deployment-frontend.yaml -n production
+                  kubectl apply -f k8s/service-customer.yaml -n production
+                  kubectl apply -f k8s/service-product.yaml -n production
+                  kubectl apply -f k8s/service-order.yaml -n production
+                  kubectl apply -f k8s/service-frontend.yaml -n production
+
+            - name: Wait for all pods to be ready
+              run: |
+                  kubectl wait --for=condition=ready pod -l app=frontend -n production --timeout=300s
+
+            - name: Verify deployment
+              run: |
+                  echo "✅ Production deployment successful!"
+                  kubectl get svc -n production

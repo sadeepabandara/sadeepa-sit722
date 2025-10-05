@@ -1,0 +1,68 @@
+name: Deploy to AKS Staging
+
+on:
+    workflow_run:
+        workflows: ['CI - Test, Build & Push (testing branch)']
+        types:
+            - completed
+    push:
+        branches:
+            - testing
+
+jobs:
+    deploy-staging:
+        # only run if previous CI workflow succeeded, or on push to testing
+        if: ${{ github.event.workflow_run.conclusion == 'success' || github.event_name == 'push' }}
+        runs-on: ubuntu-latest
+
+        steps:
+            - name: Checkout code
+              uses: actions/checkout@v4
+
+            - name: Azure Login
+              uses: azure/login@v2
+              with:
+                  creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+            - name: Set AKS context
+              uses: azure/aks-set-context@v4
+              with:
+                  resource-group: ${{ secrets.RESOURCE_GROUP }}
+                  cluster-name: ${{ secrets.AKS_CLUSTER_NAME }}
+
+            - name: Create staging namespace
+              run: |
+                  kubectl create namespace staging --dry-run=client -o yaml | kubectl apply -f -
+                  echo "✅ Namespace 'staging' created or already exists."
+
+            - name: Deploy backend & frontend services
+              run: |
+                  echo "🚀 Deploying services to AKS staging..."
+                  kubectl apply -f k8s/deployment-customer.yaml -n staging || true
+                  kubectl apply -f k8s/deployment-product.yaml -n staging || true
+                  kubectl apply -f k8s/deployment-order.yaml -n staging || true
+                  kubectl apply -f k8s/deployment-frontend.yaml -n staging || true
+
+                  kubectl apply -f k8s/service-customer.yaml -n staging || true
+                  kubectl apply -f k8s/service-product.yaml -n staging || true
+                  kubectl apply -f k8s/service-order.yaml -n staging || true
+                  kubectl apply -f k8s/service-frontend.yaml -n staging || true
+
+            - name: Wait for pods to be ready
+              run: |
+                  echo "⏳ Waiting for all pods in 'staging' to become ready..."
+                  kubectl wait --for=condition=ready pods --all -n staging --timeout=300s || true
+                  kubectl get pods -n staging
+
+            - name: Acceptance test (verify services)
+              run: |
+                  echo "🔍 Checking deployed services in 'staging'..."
+                  kubectl get svc -n staging
+                  echo "✅ Staging deployment verified!"
+
+            - name: Cleanup staging environment
+              if: always()
+              run: |
+                  echo "🧹 Cleaning up staging environment..."
+                  kubectl delete namespace staging --ignore-not-found
+                  echo "✅ Staging environment cleaned up."

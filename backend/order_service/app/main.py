@@ -24,6 +24,10 @@ from .schemas import (
     OrderUpdate,
 )
 
+# --- External Service URLs for Integration ---
+PRODUCT_SERVICE_URL = os.getenv("PRODUCT_SERVICE_URL", "http://localhost:8000")
+
+
 # --- Standard Logging Configuration ---
 logging.basicConfig(
     level=logging.INFO,
