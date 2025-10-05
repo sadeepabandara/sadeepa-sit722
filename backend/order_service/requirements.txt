@@ -4,4 +4,4 @@ sqlalchemy
 psycopg2-binary
 pydantic
 aio-pika
-httpx
+httpx>=0.26.0
