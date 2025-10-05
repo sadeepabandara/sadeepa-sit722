@@ -53,4 +53,4 @@ jobs:
               if: always()
               run: |
                   kubectl delete namespace staging --ignore-not-found
-                  echo "Cleaned up staging environment."
+                  echo "Clean up staging environment."
